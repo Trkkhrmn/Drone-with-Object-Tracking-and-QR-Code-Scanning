@@ -43,6 +43,8 @@ pip install ultralytics
 ### 2. YOLOv8 Model
 The project uses a pre-trained YOLO model (`best.pt`) located in the `train2/weights/` directory. If you do not have a model, you can train one using **YOLOv8** by following the instructions in the [YOLOv8 documentation](https://github.com/ultralytics/ultralytics).
 
+![Alt Text](images/detect_balon.jpg "Example Title")
+
 ### 3. Connecting the Drone
 - Connect your drone via a serial connection (e.g., USB to serial or telemetry).
 - Update the `DRONE_CONNECTION_STRING` variable with the appropriate connection string for your drone, such as `/dev/ttyACM0` or `udp:127.0.0.1:14550` for a simulator.

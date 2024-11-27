@@ -43,7 +43,7 @@ pip install ultralytics
 ### 2. YOLOv8 Model
 The project uses a pre-trained YOLO model (`best.pt`) located in the `train2/weights/` directory. If you do not have a model, you can train one using **YOLOv8** by following the instructions in the [YOLOv8 documentation](https://github.com/ultralytics/ultralytics).
 
-![Test of detecting the balloon from which the UAV will detect the target](images/detect_balon.jpg "Example Title")
+![Test of detecting the balloon from which the UAV will detect the target](detect_balon.jpg "Example Title")
 
 ### 3. Connecting the Drone
 - Connect your drone via a serial connection (e.g., USB to serial or telemetry).
@@ -87,7 +87,7 @@ python drone_object_detection.py
 5. If no target is detected, the patrol is completed and the UAV lands on the QR code.
 6. When the battery level drops below a certain level, the UAV returns to its home position.
 
-[Simulation of detecting a red balloon at the first coordinate after take-off](images/video.mp4)
+[Simulation of detecting a red balloon at the first coordinate after take-off](video.gif)
 
 ## Troubleshooting
 

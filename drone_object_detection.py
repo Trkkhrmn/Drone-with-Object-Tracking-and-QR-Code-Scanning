@@ -10,6 +10,10 @@ from pymavlink import mavutil
 import numpy as np
 from pyzbar.pyzbar import decode  
 
+CAMERA_MATRIX = np.array([[1000, 0, 160], [0, 1000, 120], [0, 0, 1]]) 
+DIST_COEFFS = np.zeros((4, 1)) 
+CAMERA_HEIGHT = 0.5 
+
 try:
     import RPi.GPIO as GPIO
     GPIO.setmode(GPIO.BCM)
@@ -31,9 +35,6 @@ LOW_BATTERY_THRESHOLD = 20
 TARGET_CLASS = 'red_balloon' 
 MAX_DISTANCE_TO_TARGET = 5 
 
-'''
-YOLO model that will detect red balloons.
-'''
 model = YOLO('train2/weights/best.pt')
 
 cap = cv2.VideoCapture(VIDEO_SOURCE, cv2.CAP_V4L2)
@@ -48,16 +49,16 @@ debug_mode = True
 follow_mode = False  
 target_locked = False  
 target_location = None 
+qr_code_data = None
 
 
 def toggle_laser(state):
-    """Laser control"""
     global laser_on
     if GPIO:
         GPIO.output(LASER_PIN, state)
         laser_on = state
-        print(f"Laser is{'opened' if state else 'closed'}.")
-        
+        print(f"Laser is{' activated' if state else ' deactivated'}.")
+
 def decode_qr_code(frame):
     qr_codes = decode(frame)
     qr_data = None
@@ -74,20 +75,6 @@ def decode_qr_code(frame):
     return frame, qr_data
 
 def detect_threat(results, camera_matrix, dist_coeffs, altitude, vehicle_location):
-    """
-    Detects threats in YOLO output and estimates real-world coordinates.
-
-    Args:
-        results: YOLO detection results.
-        camera_matrix: Camera intrinsic matrix.
-        dist_coeffs: Camera distortion coefficients.
-        altitude: Drone altitude (meters).
-        vehicle_location: Drone's global location.
-
-    Returns:
-        tuple: (bool, tuple) - (True if threat detected and follow-up initiated, 
-                                 (x, y) real-world coordinates of the threat or None).
-    """
     global follow_mode, target_location
 
     for r in results:
@@ -140,7 +127,7 @@ def center_target(frame, box):
 def monitor_drone(vehicle):
     while True:
         battery = vehicle.battery.level
-        print(f"Battery: {battery}%")
+        print(f"Battery level: {battery}%")
         if battery <= LOW_BATTERY_THRESHOLD:
             print("Low battery! Returning home...")
             vehicle.mode = VehicleMode("RTL")
@@ -149,7 +136,7 @@ def monitor_drone(vehicle):
 
 
 def video_stream(vehicle):
-    global frame_count, debug_mode, follow_mode, target_locked, target_location
+    global frame_count, debug_mode, follow_mode, target_locked, target_location, qr_code_data
 
     while True:
         success, frame = cap.read()
@@ -157,19 +144,21 @@ def video_stream(vehicle):
             print("Video source unreadable.")
             break
 
-        frame, qr_data = decode_qr_code(frame)
+        frame, qr_code_data = decode_qr_code(frame)
 
         results = model(frame, conf=CONFIDENCE_THRESHOLD)
 
         if not follow_mode:
-            detect_threat(results)
+            if not detect_threat(results, CAMERA_MATRIX, DIST_COEFFS, vehicle.location.global_relative_frame.alt, vehicle.location.global_relative_frame):
+                if qr_code_data:
+                    print(f"QR Code data received: {qr_code_data}")
         else:
             for r in results:
                 for box in r.boxes.data.tolist():
                     if r.names[int(box[5])] == TARGET_CLASS and box[4] > CONFIDENCE_THRESHOLD:
                         if center_target(frame, box):
                             toggle_laser(True)
-                            print("Target centred. Laser active!")
+                            print("Target centered. Laser active!")
                             time.sleep(1)
                             toggle_laser(False)
                             follow_mode = False
@@ -199,22 +188,22 @@ def video_stream(vehicle):
 
 def arm_and_takeoff(aTargetAltitude, vehicle):
     while not vehicle.is_armable:
-        print("Waiting for Arming...")
+        print("Waiting for arming...")
         time.sleep(1)
 
-    print("Arming starts.")
+    print("Arming.")
     vehicle.mode = VehicleMode("GUIDED")
     vehicle.armed = True
     while not vehicle.armed:
-        print("The armouring process continues...")
+        print("Arming...")
         time.sleep(1)
 
-    print(f"{aTargetAltitude} take-off to metres.")
+    print(f"Taking off to {aTargetAltitude} meters.")
     vehicle.simple_takeoff(aTargetAltitude)
 
     while True:
         VTOL_alt = vehicle.location.global_relative_frame.alt
-        print(f"Current altitude: {VTOL_alt} metre.")
+        print(f"Current altitude: {VTOL_alt} meters.")
         if VTOL_alt>=aTargetAltitude*0.95:
             print("Take-off complete.")
             break
@@ -222,7 +211,6 @@ def arm_and_takeoff(aTargetAltitude, vehicle):
 
 
 def send_ned_velocity(vehicle, velocity_x, velocity_y, velocity_z):
-    """Controls the drone with NED speeds."""
     msg = vehicle.message_factory.set_position_target_local_ned_encode(
         0,       
         0, 0,    
@@ -230,24 +218,23 @@ def send_ned_velocity(vehicle, velocity_x, velocity_y, velocity_z):
         0b0000111111000111, 
         0, 0, 0, 
         velocity_x, velocity_y, velocity_z, 
-         0, 0, 0, 
+        0, 0, 0, 
         0, 0)    
     vehicle.send_mavlink(msg)
     vehicle.flush()
 
 
 def get_distance_metres(location1, location2):
-    """Calculates the distance between two points."""
     dlat = location1.lat - location2.lat
     dlon = location1.lon - location2.lon
     return math.sqrt((dlat * dlat) + (dlon * dlon)) * 1.113195e5
 
 
 def connect_to_drone():
-    print("Connecting to the UAV...")
+    print("Connecting to drone...")
     try:
         vehicle = connect(DRONE_CONNECTION_STRING, baud=BAUD_RATE, wait_ready=True)
-        print("The connection is successful.")
+        print("Connection successful.")
         return vehicle
     except APIException as e:
         print(f"Connection error: {e}")
@@ -256,21 +243,63 @@ def connect_to_drone():
         print(f"Connection failed: {e}")
         sys.exit()
 
+def fly_rectangle(points, vehicle):
+    global follow_mode
+    for point in points:
+        if follow_mode:
+            print("[Patrol stopped] Following target...")
+            break
+        print(f"Going to target: {point}")
+        vehicle.simple_goto(point)
+        while True:
+            current_location = vehicle.location.global_relative_frame
+            distance = get_distance_metres(current_location, point)
+            if distance < 1.0:
+                print(f"Arrived at target: {point}")
+                break
+            time.sleep(1)
+        time.sleep(5)  
+
 
 def main():
     vehicle = connect_to_drone()
 
     try:
-        target_altitude = float(input("How many metres to take off? "))
+        target_altitude = float(input("Enter desired altitude for takeoff (meters): "))
         arm_and_takeoff(target_altitude, vehicle)
+
+        points = [
+            LocationGlobalRelative(41.10171, 29.02304, target_altitude),
+            LocationGlobalRelative(41.10175, 29.02349, target_altitude),
+            LocationGlobalRelative(41.10152, 29.02352, target_altitude),
+            LocationGlobalRelative(41.10149, 29.02306, target_altitude),
+            LocationGlobalRelative(41.10160, 29.02370, target_altitude),
+            LocationGlobalRelative(41.10165, 29.02375, target_altitude),
+            LocationGlobalRelative(41.10170, 29.02380, target_altitude),
+            LocationGlobalRelative(41.10155, 29.02385, target_altitude),
+            LocationGlobalRelative(41.10145, 29.02310, target_altitude),
+            LocationGlobalRelative(41.10140, 29.02320, target_altitude),
+            LocationGlobalRelative(41.10135, 29.02330, target_altitude),
+            LocationGlobalRelative(41.10130, 29.02340, target_altitude),
+        ]
 
         Thread(target=monitor_drone, args=(vehicle,)).start()
         Thread(target=video_stream, args=(vehicle,)).start()
 
-        # Patrol and follow routine (unchanged)
+        try:
+            fly_rectangle(points, vehicle)
+        except Exception as e:
+            print(f"An error occurred during patrol: {e}")
+
+
+        if not follow_mode:
+            print("Patrol complete. Returning home...")
+            vehicle.mode = VehicleMode("RTL")
+            while vehicle.mode.name != "RTL":
+                time.sleep(1)
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"An error occurred: {e}")
     finally:
         print("Disconnecting...")
         vehicle.close()

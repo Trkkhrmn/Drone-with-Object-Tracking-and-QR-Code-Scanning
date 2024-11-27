@@ -2,19 +2,22 @@
 
 This project integrates object detection, QR code scanning, and laser control into a drone system using the **DroneKit** library for UAV control, **YOLOv8** for object detection, and **pyzbar** for QR code scanning. The drone is controlled to follow a specific target (for example, a red balloon is preferred in this project) while scanning QR codes and performing actions based on the detections. If the appropriate position is achieved during the tracking code, the target can be marked with the laser integrated into the drone.
 
-## Features
-- **Object Detection**: Uses YOLOv8 to detect specific objects (e.g., red balloons) in the camera feed.
-- **QR Code Detection**: Detects and decodes QR codes in the camera feed. Displays the QR code data on the screen.
-- **Laser Control**: Activates the drone's laser when the target is centered in the camera feed.
-- **Autonomous Flight**: The drone can autonomously follow the detected target and return home when the battery is low.
-- **Real-Time Video Stream**: Continuously processes the video feed to detect objects and QR codes.
+## Functionality
+The system performs the following tasks:
 
-## Requirements
+1. **Real-time Video Streaming and Processing:** Captures video from the drone's onboard camera and processes it in real-time using YOLOv8. The model is trained to detect specified threat classes (currently "red_balloon," but easily customizable).
 
-### Hardware:
-- **Drone**: A UAV with MAVLink compatibility.
-- **Camera**: A camera connected to the Raspberry Pi (or other compatible system) to capture the video feed.
-- **Laser Module**: Optional, controlled via GPIO pins on a Raspberry Pi (for target marking).
+2. **Threat Detection and Real-World Coordinate Estimation:** Identifies threats and attempts to estimate their real-world 2D coordinates relative to the drone using camera calibration parameters. Important: Accurate coordinate estimation requires precise camera calibration (intrinsic matrix and distortion coefficients). The provided coordinate estimation is a simplified approximation and might require significant adjustments depending on your camera setup and drone's characteristics.
+
+3. **Autonomous Threat Tracking:** If a threat is detected, the drone attempts to autonomously track the threat by adjusting its position to keep the threat centered in the camera's field of view. The current implementation uses simple simple_goto commands and may require more sophisticated control algorithms for robust tracking.
+
+4. **Laser Pointer Control:** If a threat is locked on and centered, and the necessary hardware is connected, the system can activate a laser pointer attached to the drone (requires appropriate hardware and GPIO configuration).
+
+5. **QR Code Detection and Processing:** Decodes QR codes detected in the video stream. Currently, it only prints the decoded data to the console, but you can extend this functionality to trigger actions or modify the drone's behavior based on the QR code content.
+
+6. **Drone Control:** Uses the DroneKit library for communication with the drone, enabling autonomous takeoff, landing, waypoint navigation (rectangular patrol pattern), and emergency return-to-home (RTL) functionality.
+
+7. **Battery Monitoring:** Monitors the drone's battery level and initiates an RTL maneuver if the battery falls below a user-defined threshold.
 
 ## Setup
 
@@ -75,11 +78,12 @@ python drone_object_detection.py
 - **d**: Toggle debug mode (shows additional information in the terminal).
 
 ### Example Workflow
-1. The drone takes off and starts analyzing the camera feed.
-2. When a red balloon (or other target) is detected, the drone starts following the target.
-3. If the QR code is detected, its data will be printed in the terminal, and the QR code will be highlighted on the screen.
-4. If the target is centered and laser control is active, the drone will activate the laser.
-5. The drone will return to its home location if the battery level is low.
+1. The UAV takes off and starts analyzing the camera feed.
+2. It patrols the points whose coordinates are entered.
+3. When a red balloon (or other target) is detected during the patrol, the UAV starts tracking the target.
+4. If the target is centered and the laser control is enabled, the UAV activates the laser and lands on the QR code.
+5. If no target is detected, the patrol is completed and the UAV lands on the QR code.
+6. When the battery level drops below a certain level, the UAV returns to its home position.
 
 ## Troubleshooting
 

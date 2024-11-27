@@ -1,6 +1,6 @@
 # Drone with Object Detection and QR Code Scanning
 
-This project integrates object detection, QR code scanning, and laser control into a drone system using the **DroneKit** library for UAV control, **YOLOv8** for object detection, and **pyzbar** for QR code scanning. The drone can be controlled to follow a specific target (e.g., a red balloon) while also scanning for QR codes and performing actions based on detections.
+This project integrates object detection, QR code scanning, and laser control into a drone system using the **DroneKit** library for UAV control, **YOLOv8** for object detection, and **pyzbar** for QR code scanning. The drone is controlled to follow a specific target (for example, a red balloon is preferred in this project) while scanning QR codes and performing actions based on the detections. If the appropriate position is achieved during the tracking code, the target can be marked with the laser integrated into the drone.
 
 ## Features
 - **Object Detection**: Uses YOLOv8 to detect specific objects (e.g., red balloons) in the camera feed.
@@ -15,17 +15,6 @@ This project integrates object detection, QR code scanning, and laser control in
 - **Drone**: A UAV with MAVLink compatibility.
 - **Camera**: A camera connected to the Raspberry Pi (or other compatible system) to capture the video feed.
 - **Laser Module**: Optional, controlled via GPIO pins on a Raspberry Pi (for target marking).
-
-### Software:
-- **Python 3.x**
-- **Libraries**:
-    - `opencv-python`: For video capture and image processing.
-    - `ultralytics`: YOLOv8 object detection model.
-    - `pyzbar`: For QR code scanning.
-    - `dronekit`: For UAV communication.
-    - `RPi.GPIO`: (Optional) For laser control via GPIO pins.
-    - `numpy`: For numerical operations.
-    - `time`, `math`, `os`: Standard Python libraries for timing, math operations, and file handling.
 
 ## Setup
 
